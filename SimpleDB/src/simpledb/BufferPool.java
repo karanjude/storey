@@ -1,6 +1,8 @@
 package simpledb;
 
 import java.io.*;
+import java.util.HashMap;
+import java.util.Map;
 /**
  * BufferPool manages the reading and writing of pages into memory from
  * disk. Access methods call into it to retrieve pages, and it fetches
@@ -18,6 +20,8 @@ public class BufferPool {
     other classes. BufferPool should use the numPages argument to the
     constructor instead. */
     public static final int DEFAULT_PAGES = 50;
+    
+    private Map<PageId, Page > cachedPages = new HashMap<PageId, Page>();
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -48,37 +52,19 @@ public class BufferPool {
     	
     	DbFile dbFile = Database.getCatalog().getDbFile(pid.getTableId());
     	HeapFile heapFile = (HeapFile) dbFile;
-    	File backingFile = heapFile.getFile();
+
+    	if(cachedPages.containsKey(pid))
+    		return cachedPages.get(pid);
+    	
+    	HeapPage result = (HeapPage) heapFile.readPage(pid);
+    	
+    	if(null != result){
+    		cachedPages.put(pid, result);
+    	}
     	
        	RandomAccessFile randomAccessFile;
 
-    	try {
-			randomAccessFile = new RandomAccessFile(backingFile, "r" );
-		} catch (FileNotFoundException e1) {
-			e1.printStackTrace();
-			return null;
-		}
-    	
-    	byte[] buffer = new byte[BufferPool.PAGE_SIZE];
-    	
-    	try {
-			randomAccessFile.read(buffer, pid.pageno() * BufferPool.PAGE_SIZE,  BufferPool.PAGE_SIZE);
-		} catch (IOException e1) {
-			e1.printStackTrace();
-			return null;
-		} catch(IndexOutOfBoundsException e){
-			return null;
-		}
-    	
-		HeapPageId p = (HeapPageId) pid;
-    	HeapPage result = null;
-		
-		try {
-			result = new HeapPage(p, buffer);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		
+   	
 		return result;    	
     }
 

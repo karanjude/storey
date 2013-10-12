@@ -113,82 +113,47 @@ public class HeapFile implements DbFile {
 
 	// see DbFile.java for javadocs
     public Page readPage(PageId pid) {
-    	if(null != this.buffer){
-    		HeapPageId id = (HeapPageId) pid;
-    		try {
-				HeapPage result = new HeapPage(id, this.buffer);
-				cachedPages.put(id, result);
-				return result;
-			} catch (IOException e) {
-				e.printStackTrace();
-				return null;
-			}
-    	}
+    	RandomAccessFile randomAccessFile = null;
     	
-//    	try {
-//			return Database.getBufferPool().getPage(null, pid, null);
-//		} catch (TransactionAbortedException e) {
-//			e.printStackTrace();
-//			return null;
-//		} catch (DbException e) {
-//			e.printStackTrace();
-//			return null;
-//		}
-    	
-    	RandomAccessFile randomAccessFile;
-
     	try {
-			randomAccessFile = new RandomAccessFile(this.f, "r" );
+			randomAccessFile = new RandomAccessFile(getFile(), "r" );
 		} catch (FileNotFoundException e1) {
 			e1.printStackTrace();
 			return null;
 		}
     	
-    	byte[] buffer = new byte[BufferPool.PAGE_SIZE];
+    	byte[] heapPageBuffer = new byte[BufferPool.PAGE_SIZE];
     	
-//    	int pageNoCount = 0;
-//    	int read = 0;
-//    	
-//    	FileInputStream reader;
-//
-//		try {
-//			reader = new FileInputStream(this.f);
-//			while((read = reader.read(buffer)) != -1){
-//				if(pageNoCount == pid.pageno())
-//					break;
-//				
-//				pageNoCount++;
-//			}
-//			
-//			reader.close();
-//		} catch (FileNotFoundException e) {
-//			e.printStackTrace();
-//		} catch (IOException e) {
-//			e.printStackTrace();
-//		}
-//		
-//		
     	try {
-			randomAccessFile.read(buffer, pid.pageno() * BufferPool.PAGE_SIZE,  BufferPool.PAGE_SIZE);
-			randomAccessFile.close();
+    		randomAccessFile.skipBytes(pid.pageno() * BufferPool.PAGE_SIZE);
+			randomAccessFile.read(heapPageBuffer, 0,  BufferPool.PAGE_SIZE);
 		} catch (IOException e1) {
 			e1.printStackTrace();
+			heapPageBuffer = null;
 			return null;
-		}catch(IndexOutOfBoundsException e){
-			return null;
+		} catch(IndexOutOfBoundsException e){
+			e.printStackTrace();
+			heapPageBuffer = null;
 		}
-    	
     	
 		HeapPageId p = (HeapPageId) pid;
     	HeapPage result = null;
+    	
+    	if(null != heapPageBuffer){
+    		try {
+    			result = new HeapPage(p, heapPageBuffer);
+    		} catch (IOException e) {
+    			e.printStackTrace();
+    		}
+    	}
 		
-		try {
-			result = new HeapPage(p, buffer);
+    	try {
+			randomAccessFile.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		
-		return result;
+
+    	return result;
     }
 
     // see DbFile.java for javadocs
@@ -222,6 +187,7 @@ public class HeapFile implements DbFile {
 
     // see DbFile.java for javadocs
     public DbFileIterator iterator(TransactionId tid) {
+    	final TransactionId transactionId = tid;
     	final HeapFile heapFile = this;
     	
     	return new DbFileIterator() {
@@ -247,6 +213,7 @@ public class HeapFile implements DbFile {
 				} catch (FileNotFoundException e) {
 					e.printStackTrace();
 				}
+				pageNo = 0;
 			}
 			
 			@Override
@@ -303,11 +270,23 @@ public class HeapFile implements DbFile {
 				if(-1 == read || BufferPool.PAGE_SIZE != read)
 					return null;
 				
-				HeapPageId heapPageId = new HeapPageId(heapFile.getId(), pageNo++);
-				if(cachedPages.containsKey(heapPageId))
-					return cachedPages.get(heapPageId);
+				HeapPageId heapPageId = new HeapPageId(heapFile.getId(), pageNo);
 				
-				heapPage = (HeapPage) heapFile.readPage(heapPageId, buffer);
+				try {
+					heapPage =  (HeapPage) Database.getBufferPool().getPage(transactionId, heapPageId, null);
+					pageNo++;
+				} catch (TransactionAbortedException e) {
+					e.printStackTrace();
+					heapPage = null;
+				} catch (DbException e) {
+					e.printStackTrace();
+					heapPage = null;
+				}
+				
+//				if(cachedPages.containsKey(heapPageId))
+//					return cachedPages.get(heapPageId);
+//				
+//				heapPage = (HeapPage) heapFile.readPage(heapPageId, buffer);
 				
 //				try {
 //					heapPage = new HeapPage(heapPageId, buffer);
