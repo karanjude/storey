@@ -74,7 +74,16 @@ public class Tuple {
      * where \t is any whitespace, except newline, and \n is a newline
      */
     public String toString() {
-        // some code goes here
-        throw new UnsupportedOperationException("Implement this");
+    	StringBuffer buffer = new StringBuffer();
+    	buffer.append('[');
+    	
+    	for (int i = 0; i < td.numFields(); i++) {
+			buffer.append(getField(i).toString());
+			buffer.append(' ');
+		}
+    	
+    	buffer.append(']');
+    	
+    	return buffer.toString();
     }
 }

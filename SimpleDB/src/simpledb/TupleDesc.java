@@ -31,13 +31,15 @@ public class TupleDesc {
     	
     	for(int i = 0;i < td1.numFields;i++){
     		types[ctr] =  td1.typeAr[i];
-    		strings[ctr] = td1.fieldAr[i];
+    		if(null != td1.fieldAr)
+    			strings[ctr] = td1.fieldAr[i];
     		ctr++;
     	}
     	
     	for(int i = 0;i < td2.numFields;i++){
     		types[ctr] = td2.typeAr[i];
-    		strings[ctr] = td2.fieldAr[i];
+    		if(null != td2.fieldAr)
+    			strings[ctr] = td2.fieldAr[i];
     		ctr++;
     	}
     	
