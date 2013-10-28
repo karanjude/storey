@@ -128,8 +128,10 @@ public class BufferPool {
      */
     public  void insertTuple(TransactionId tid, int tableId, Tuple t)
         throws DbException, IOException, TransactionAbortedException {
-        // some code goes here
-        // not necessary for lab1
+    	
+    	PageId pageId = t.getRecordId().getPageId();
+    	HeapPage pageToUpdate = (HeapPage) getPage(tid, pageId, null);
+    	pageToUpdate.addTuple(t);
     }
 
     /**
@@ -147,8 +149,10 @@ public class BufferPool {
      */
     public  void deleteTuple(TransactionId tid, Tuple t)
         throws DbException, TransactionAbortedException {
-        // some code goes here
-        // not necessary for lab1
+    	
+    	PageId pageId = t.getRecordId().getPageId();
+    	HeapPage pageToUpdate = (HeapPage) getPage(tid, pageId, null);
+    	pageToUpdate.deleteTuple(t);
     }
 
     /**

@@ -238,8 +238,22 @@ public class HeapPage implements Page {
      * @param t The tuple to delete
      */
     public void deleteTuple(Tuple t) throws DbException {
-        // some code goes here
-        // not necessary for lab1
+    	if(!getId().equals(t.getRecordId().getPageId()))
+    		throw new DbException("Record Id Mismatch");
+    	
+    	int tno = t.getRecordId().tupleno();
+    	
+    	if(!getSlot(tno))
+    		throw new DbException("Trying to delete an empty slot");
+    	
+    	if(!slotsFilled.contains(tno))
+    		throw new DbException("Trying to delete a non existant tuple");
+    		
+    	setSlot(tno, false);
+    	tuples[tno] = null;
+    	
+    	int indexToRemove = slotsFilled.indexOf(tno);
+    	slotsFilled.remove(indexToRemove);
     }
 
     /**
@@ -250,26 +264,71 @@ public class HeapPage implements Page {
      * @param t The tuple to add.
      */
     public void addTuple(Tuple t) throws DbException {
-        // some code goes here
-        // not necessary for lab1
+    	if(getNumEmptySlots() == 0)
+    		throw new DbException("Page Full, no empty slots available");
+    	
+    	if(!td.equals(t.getTupleDesc()))
+    		throw new DbException("Tuple Description misatch");
+
+    	int index = indexOfEmptySlot();
+    	
+    	t.setRecordId(new RecordId(this.getId(), index));
+
+    	tuples[index] = t;
+    	setSlot(index, true);
     }
 
+    private int indexOfEmptySlot() {
+    	int indexToReturn = 0;
+    	
+    	for (int i = 0; i < header.length; i++, indexToReturn += 8) {
+    		byte b = header[i];
+    		byte r = ~0;
+    		if((b & r) != r){
+    			for(int bi = 0;bi < 8;bi++)
+    				if(!isSlotFilled(bi, b))
+    					return indexToReturn + bi;
+    		}
+		}
+    	
+		return 0;
+	}
+
+	private int freeOffset(byte b) {
+		int result = 8 + 1;
+
+		for (int i = 8; i >= 1; i--) {
+			if(!getBit(b, i)){
+				result -= i;
+				break;
+			}
+		}
+		
+		return result;
+	}
+
+	private boolean getBit(byte b, int bitNumber) {
+		return (b & (1 << bitNumber - 1)) != 0;
+	}
+
+	private TransactionId dirtyTranscation = null;
+    
     /**
      * Marks this page as dirty/not dirty and record that transaction
      * that did the dirtying
      */
     public void markDirty(boolean dirty, TransactionId tid) {
-        // some code goes here
-	// not necessary for lab1
+    	if(dirty)
+    		dirtyTranscation = tid;
+    	else
+    		dirtyTranscation = null;
     }
 
     /**
      * Returns the tid of the transaction that last dirtied this page, or null if the page is not dirty
      */
     public TransactionId isDirty() {
-        // some code goes here
-	// Not necessary for lab1
-        return null;
+    	return dirtyTranscation;
     }
 
     /**
@@ -294,18 +353,29 @@ public class HeapPage implements Page {
     	int offsetOfByteHeaderToCheck = index % 8;
     	
     	byte headerByte = header[indexOfByteHeaderToCheck];
-    	if((headerByte & (1 << offsetOfByteHeaderToCheck)) > 0)
+    	return isSlotFilled(offsetOfByteHeaderToCheck, headerByte);
+	}
+
+	private boolean isSlotFilled(int offsetOfByteHeaderToCheck, byte headerByte) {
+		if((headerByte & (1 << offsetOfByteHeaderToCheck)) > 0)
     		return true;
-    	
 		return false;
 	}
 
 	/**
      * Abstraction to fill or clear a slot on this page.
      */
-    private void setSlot(int i, boolean value) {
-        // some code goes here
-        // not necessary for lab1
+    private void setSlot(int index, boolean value) {
+    	int indexOfByteHeaderToCheck = index / 8;
+    	int offsetOfByteHeaderToCheck = index % 8;
+    	
+    	byte headerByte = header[indexOfByteHeaderToCheck];
+    	byte r = (byte) (1 << offsetOfByteHeaderToCheck);
+    	byte newByte = (byte) (headerByte | r);
+    	header[indexOfByteHeaderToCheck] = newByte;
+    	
+    	if(value)
+    		slotsFilled.add(index);
     }
 
     /**
