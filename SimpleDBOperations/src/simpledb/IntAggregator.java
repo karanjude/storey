@@ -31,64 +31,29 @@ public class IntAggregator implements Aggregator {
 		this.gbfield = gbfield;
 		this.gbfieldtype = gbfieldtype;
 		this.afield = afield;
+		if(NO_GROUPING != gbfield)
+			groupingStrategy = new GroupingStrategy(gbfield, afield, what, gbfieldtype);
+		else
+			groupingStrategy = new NoGroupingStrategy(gbfield,afield, what, gbfieldtype);
 		this.what = what;
     }
     
-    private Map<Field, Tuple> groupedTuples = new HashMap<Field,Tuple>();
-    private Map<Field, Integer> groupedTuplesCount = new HashMap<Field,Integer>();
+
+	private GroupingStrategy groupingStrategy;
     
     /**
      * Merge a new tuple into the aggregate, grouping as indicated in the constructor
      * @param tup the Tuple containing an aggregate field and a group-by field
      */
     public void merge(Tuple tup) {
-    	Field groupByFiled = tup.getField(gbfield);
+    	System.out.println("tup : " + tup);
+    	groupingStrategy.merge(tup);
+
     	
-    	if(!groupedTuples.containsKey(groupByFiled)){
-    		Tuple mergedTuple = new Tuple(tup.getTupleDesc());
-    		mergedTuple.setField(gbfield, groupByFiled);
-    		mergedTuple.setField(afield, new IntField(tup.getField(afield).hashCode()));
-    		groupedTuples.put(groupByFiled, mergedTuple);
-    	}else{
-    		updateGroupedTuples(groupByFiled, tup);
-    	}
     	hasRecords = true;
     }
 
-    private void updateGroupedTuples(Field groupByFiled, Tuple tup) {
-    	Tuple groupedTuple = groupedTuples.get(groupByFiled);
-    	Field aggregateField = groupedTuple.getField(afield);
-    	
-    	switch(what){
-    	case SUM:
-    		int sum = tup.getField(afield).hashCode() + groupedTuple.getField(afield).hashCode();
-    		groupedTuple.setField(afield, new IntField(sum));
-    		break;
-    	case AVG:
-    		if(!groupedTuplesCount.containsKey(groupByFiled)){
-    			groupedTuplesCount.put(groupByFiled, 1);
-    		}
 
-    		int sum1 = tup.getField(afield).hashCode() + aggregateField.hashCode();
-    		int cnt = groupedTuplesCount.get(groupByFiled) + 1;
-    		
-    		groupedTuple.setField(afield, new IntField((int)(sum1 / cnt)));
-    		break;
-    	case MIN:
-    		Predicate p = new Predicate(afield, Predicate.Op.LESS_THAN, aggregateField);
-    		if(p.filter(tup)){
-        		groupedTuple.setField(afield, new IntField(tup.getField(afield).hashCode()));
-    		}
-    		break;
-    	case MAX:
-    		Predicate p1 = new Predicate(afield, Predicate.Op.GREATER_THAN, aggregateField);
-    		if(p1.filter(tup)){
-        		groupedTuple.setField(afield, new IntField(tup.getField(afield).hashCode()));
-    		}
-    	}
-    	
-   		groupedTuples.put(groupByFiled, groupedTuple);
-	}
 
 	/**
      * Create a DbIterator over group aggregate results.
@@ -112,7 +77,7 @@ public class IntAggregator implements Aggregator {
 			
 			@Override
 			public void open() throws DbException, TransactionAbortedException {
-				iterator = groupedTuples.entrySet().iterator();
+				iterator = groupingStrategy.groupedTuplesIterator();
 			}
 			
 			@Override

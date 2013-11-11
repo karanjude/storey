@@ -69,6 +69,9 @@ public class Aggregate extends AbstractDbIterator {
 
     public void open()
         throws NoSuchElementException, DbException, TransactionAbortedException {
+    	
+    	child.open();
+    	
     	while(child.hasNext()){
         	Tuple tupleToMerge = child.next();
         	aggregator.merge(tupleToMerge);
@@ -91,6 +94,7 @@ public class Aggregate extends AbstractDbIterator {
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
+    	child.rewind();
     	iterator.rewind();
     }
 
@@ -135,6 +139,7 @@ public class Aggregate extends AbstractDbIterator {
     }
 
     public void close() {
+    	child.close();
     	iterator.close();
     }
     

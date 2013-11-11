@@ -1,4 +1,5 @@
 package simpledb;
+import java.io.IOException;
 import java.util.*;
 
 /**
@@ -7,7 +8,12 @@ import java.util.*;
  */
 public class Insert extends AbstractDbIterator {
 
-    /**
+    private final int tableid;
+	private final DbIterator child;
+	private final TransactionId t;
+	boolean opened = false;
+
+	/**
      * Constructor.
      * @param t The transaction running the insert.
      * @param child The child operator from which to read tuples to be inserted.
@@ -16,24 +22,33 @@ public class Insert extends AbstractDbIterator {
      */
     public Insert(TransactionId t, DbIterator child, int tableid)
         throws DbException {
-        // some code goes here
+			this.t = t;
+			this.child = child;
+			this.tableid = tableid;
     }
 
     public TupleDesc getTupleDesc() {
-        // some code goes here
-        return null;
+    	Type[] types = new Type[]{
+    		Type.INT_TYPE
+    	};
+    	
+    	TupleDesc tupleDesc = new TupleDesc(types);
+    	return tupleDesc;
     }
 
     public void open() throws DbException, TransactionAbortedException {
-        // some code goes here
+    	opened = true;
+    	child.open();
     }
 
     public void close() {
-        // some code goes here
+    	opened = false;
+    	child.close();
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
-        // some code goes here
+    	open();
+    	child.rewind();
     }
 
     /**
@@ -51,7 +66,27 @@ public class Insert extends AbstractDbIterator {
      */
     protected Tuple readNext()
             throws TransactionAbortedException, DbException {
-        // some code goes here
-        return null;
+    	if(!opened)
+    		return null;
+    	
+    	int recordsInserted = 0;
+    	
+    	while(child.hasNext()){
+    		Tuple tuple = child.next();
+    		try {
+    			DbFile dbFile = Database.getCatalog().getDbFile(this.tableid);
+    			dbFile.addTuple(t, tuple);
+    			recordsInserted++;
+    		} catch (IOException e) {
+    			throw new DbException(" could not insert db record");
+    		}
+    	}
+
+    	opened = false;
+    	
+    	Tuple result = new Tuple(getTupleDesc());
+    	result.setField(0, new IntField(recordsInserted));
+    	
+        return result;
     }
 }

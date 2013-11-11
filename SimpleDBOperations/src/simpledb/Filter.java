@@ -50,9 +50,6 @@ public class Filter extends AbstractDbIterator {
     protected Tuple readNext()
         throws NoSuchElementException, TransactionAbortedException, DbException {
     	
-    	if(!child.hasNext())
-    		return null;
-
     	Tuple tupleToReturn = null;
     	
     	while(child.hasNext()){

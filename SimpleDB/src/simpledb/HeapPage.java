@@ -19,6 +19,8 @@ public class HeapPage implements Page {
     int numSlots;
     
     List<Integer> slotsFilled = new ArrayList<Integer>();
+	List<Integer> deletedSlots = new ArrayList<Integer>();
+
 
     byte[] oldData;
 
@@ -187,6 +189,9 @@ public class HeapPage implements Page {
 
             // non-empty slot
             for (int j=0; j<td.numFields(); j++) {
+            	if(null == tuples[i])
+            		System.out.println("null");
+            	
                 Field f = tuples[i].getField(j);
                 try {
                     f.serialize(dos);
@@ -253,7 +258,9 @@ public class HeapPage implements Page {
     	tuples[tno] = null;
     	
     	int indexToRemove = slotsFilled.indexOf(tno);
-    	slotsFilled.remove(indexToRemove);
+    	slotsFilled.set(indexToRemove, -1);
+    	deletedSlots.add(indexToRemove);
+    	//slotsFilled.remove(indexToRemove);
     }
 
     /**
@@ -335,7 +342,7 @@ public class HeapPage implements Page {
      * Returns the number of empty slots on this page.
      */
     public int getNumEmptySlots() {
-    	return tuples.length - slotsFilled.size();
+    	return tuples.length - slotsFilled.size() + deletedSlots.size();
     }
 
     /**
@@ -372,6 +379,18 @@ public class HeapPage implements Page {
     	byte headerByte = header[indexOfByteHeaderToCheck];
     	byte r = (byte) (1 << offsetOfByteHeaderToCheck);
     	byte newByte = (byte) (headerByte | r);
+    	
+    	if(!value){
+    		byte ll = headerByte;
+    		//ystem.out.format("0x%x ", ll);
+    		byte rr = (byte) ~r;
+    		//System.out.format("0x%x ", rr);
+    		byte res =  (byte) (ll & rr);
+    		//System.out.format("0x%x ", res);
+    		newByte = (byte) res;
+    		//System.out.format("0x%x ", newByte);
+    	}
+    	
     	header[indexOfByteHeaderToCheck] = newByte;
     	
     	if(value)
@@ -392,7 +411,17 @@ public class HeapPage implements Page {
 			
 			@Override
 			public Tuple next() {
-				Tuple toReturn = tuples[slotsFilled.get(ctr)];
+				int indx = slotsFilled.get(ctr);
+				
+				while(indx == -1 && hasNext()){
+					ctr++;
+					indx = slotsFilled.get(ctr);
+				}
+				
+				if(-1 == indx)
+					ctr++;
+					
+				Tuple toReturn = tuples[ctr];
 				ctr++;
 				
 				return toReturn;
@@ -400,7 +429,9 @@ public class HeapPage implements Page {
 			
 			@Override
 			public boolean hasNext() {
-				return ctr < slotsFilled.size();
+				int numSlots = slotsFilled.size() - deletedSlots.size();
+				boolean reachedEnd = numSlots > 0 && ctr < slotsFilled.size();
+				return reachedEnd;
 			}
 		};
     }

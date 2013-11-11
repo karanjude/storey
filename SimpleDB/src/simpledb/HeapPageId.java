@@ -33,12 +33,32 @@ public class HeapPageId implements PageId {
     	return this.pgNo;
     }
 
-    @Override
+
+    /**
+     *  Return a representation of this object as an array of
+     *  integers, for writing to disk.  Size of returned array must contain
+     *  number of integers that corresponds to number of args to one of the
+     *  constructors.
+     */
+    public int[] serialize() {
+        int data[] = new int[2];
+
+        data[0] = getTableId();
+        data[1] = pageno();
+
+        return data;
+    }
+
+	@Override
 	public int hashCode() {
-		return this.tableId * 10 + this.tableId;
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + pgNo;
+		result = prime * result + tableId;
+		return result;
 	}
 
-    @Override
+	@Override
 	public boolean equals(Object obj) {
 		if (this == obj) {
 			return true;
@@ -58,20 +78,5 @@ public class HeapPageId implements PageId {
 		}
 		return true;
 	}
-
-    /**
-     *  Return a representation of this object as an array of
-     *  integers, for writing to disk.  Size of returned array must contain
-     *  number of integers that corresponds to number of args to one of the
-     *  constructors.
-     */
-    public int[] serialize() {
-        int data[] = new int[2];
-
-        data[0] = getTableId();
-        data[1] = pageno();
-
-        return data;
-    }
 
 }

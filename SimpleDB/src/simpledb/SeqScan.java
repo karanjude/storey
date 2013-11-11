@@ -53,6 +53,10 @@ public class SeqScan implements DbIterator {
      * prefixed with the tableAlias string from the constructor.
      */
     public TupleDesc getTupleDesc() {
+       	if(null == heapFile){
+    		heapFile = Database.getCatalog().getDbFile(tableid);
+    	}
+    	
     	return heapFile.getTupleDesc();
     }
 
@@ -69,7 +73,11 @@ public class SeqScan implements DbIterator {
     		throw new NoSuchElementException("iterator null");
     	}
     	
-    	return iterator.next();
+    	Tuple n = iterator.next();
+    	
+    	//System.out.println(n);
+    	
+    	return n;
     }
 
     public void close() {

@@ -1,8 +1,12 @@
 package simpledb;
 
 import java.io.*;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 /**
  * BufferPool manages the reading and writing of pages into memory from
  * disk. Access methods call into it to retrieve pages, and it fetches
@@ -22,6 +26,13 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
     
     private Map<PageId, Page > cachedPages = new HashMap<PageId, Page>();
+    private Map<PageId, Date> lastAccessedTimeStamps = new HashMap<PageId, Date>();
+    private Map<PageId, PageLock> lockMap = new HashMap<PageId, PageLock>();
+    private Map<TransactionId, List<PageLock>> transactionLocks = new HashMap<TransactionId, List<PageLock>>();
+    
+	private final int numPages;
+
+	private PageId pid;
 
     /**
      * Creates a BufferPool that caches up to numPages pages.
@@ -29,7 +40,7 @@ public class BufferPool {
      * @param numPages maximum number of pages in this buffer pool.
      */
     public BufferPool(int numPages) {
-        // some code goes here
+		this.numPages = numPages;
     }
 
     /**
@@ -53,22 +64,58 @@ public class BufferPool {
     	DbFile dbFile = Database.getCatalog().getDbFile(pid.getTableId());
     	HeapFile heapFile = (HeapFile) dbFile;
 
-    	if(cachedPages.containsKey(pid))
+    	if(cachedPages.containsKey(pid)){
+    		
+    		if(null == acquireLock(pid, perm, tid)){
+    		}
+
+    		lastAccessedTimeStamps.put(pid, new Date());
     		return cachedPages.get(pid);
+    	}
     	
     	HeapPage result = (HeapPage) heapFile.readPage(pid);
     	
     	if(null != result){
-    		cachedPages.put(pid, result);
+    		PageLock newLock = PageLock.newLock(pid, perm, tid);
+			
+    		if(null != newLock){
+    			cachedPages.put(pid, result);
+    			lastAccessedTimeStamps.put(pid, new Date());
+    			lockMap.put(pid, newLock);
+    			if(cachedPages.size() > numPages)
+    				evictPage(tid);
+    		}
     	}
     	
-       	RandomAccessFile randomAccessFile;
-
-   	
 		return result;    	
     }
+    
+    private void reloadPage(PageId pid, TransactionId tid) throws DbException{
+    	DbFile dbFile = Database.getCatalog().getDbFile(pid.getTableId());
+    	HeapFile heapFile = (HeapFile) dbFile;
 
-    /**
+    	HeapPage result = (HeapPage) heapFile.readPage(pid);
+    	
+    	if(null != result){
+    		cachedPages.put(pid, result);
+    		
+    		if(cachedPages.size() > numPages)
+    			evictPage(tid);
+    	}
+
+    }
+
+    private PageLock acquireLock(PageId pid, Permissions perm, TransactionId tid) throws TransactionAbortedException {
+    	PageLock pageLock = lockMap.get(pid);
+    	if(null != pageLock){
+    		return pageLock.acquireLock(perm, tid);
+    	}
+    	return null;
+    }
+
+
+
+	/**
      * Releases the lock on a page.
      * Calling this is very risky, and may result in wrong behavior. Think hard
      * about who needs to call this and why, and why they can run the risk of
@@ -78,8 +125,8 @@ public class BufferPool {
      * @param pid the ID of the page to unlock
      */
     public  void releasePage(TransactionId tid, PageId pid) {
-        // some code goes here
-        // not necessary for lab1|lab2
+    	PageLock pageLock = lockMap.get(pid);
+    	pageLock.releaseLock(tid);
     }
 
     /**
@@ -88,15 +135,14 @@ public class BufferPool {
      * @param tid the ID of the transaction requesting the unlock
      */
     public  void transactionComplete(TransactionId tid) throws IOException {
-        // some code goes here
-        // not necessary for lab1|lab2
+    	transactionComplete(tid, true);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
     public   boolean holdsLock(TransactionId tid, PageId p) {
-        // some code goes here
-        // not necessary for lab1|lab2
-        return false;
+    	PageLock pageLock = lockMap.get(p);
+    	
+    	return pageLock.hasLock(tid);
     }
 
     /**
@@ -108,8 +154,42 @@ public class BufferPool {
      */
     public   void transactionComplete(TransactionId tid, boolean commit)
         throws IOException {
-        // some code goes here
-        // not necessary for lab1|lab2
+
+    	List<PageLock> locksHeld = transactionLocks.get(tid);
+    	if(null == locksHeld)
+    		return;
+    	
+    	for (PageLock pageLock : locksHeld) {
+    		pageLock.releaseLock(tid);
+    		PageId pageId = pageLock.getPageId();
+
+    		if(commit && isDirty(pageId))
+    			flushPage(pageId);
+    		else if(!commit && isDirty(pageId)){
+    			try {
+    				reloadPage(pageId, tid);
+    			} catch (DbException e) {
+    				e.printStackTrace();
+    			}
+    		}
+    		
+    		if(lockMap.containsKey(pageId) && (pageLock.hasNoLocks() || pageLock.hasExclusiveLock(tid))){
+    			lockMap.remove(pageId);
+    		}
+    				
+		}
+    	
+    	transactionLocks.remove(tid);
+    	
+    	//TODO:: FIX FALLBACK, THIS SHOULD NEVER HAPPEN
+    	for (Entry<PageId, PageLock> entry : lockMap.entrySet()) {
+			PageLock l = entry.getValue();
+			if(l.hasLock(tid)){
+				l.releaseLock(tid);
+				if(l.hasNoLocks())
+					lockMap.remove(entry.getKey());
+			}
+		}
     }
 
     /**
@@ -129,12 +209,34 @@ public class BufferPool {
     public  void insertTuple(TransactionId tid, int tableId, Tuple t)
         throws DbException, IOException, TransactionAbortedException {
     	
-    	PageId pageId = t.getRecordId().getPageId();
-    	HeapPage pageToUpdate = (HeapPage) getPage(tid, pageId, null);
+    	PageId pageId = null;
+    	HeapPage pageToUpdate = null;
+    	
+    	if(null != t.getRecordId())
+    		pageId = t.getRecordId().getPageId();
+    	
+    	if(null != pageId)
+    		pageToUpdate = (HeapPage) getPage(tid, pageId, Permissions.READ_WRITE);
+    	
+    	if(null == pageToUpdate)
+    		pageToUpdate = createNewPage(tid, pageId);
+    	
+    	lastAccessedTimeStamps.put(pageToUpdate.getId(), new Date());
+    	
     	pageToUpdate.addTuple(t);
+    	pageToUpdate.markDirty(true, tid);
     }
 
-    /**
+    private HeapPage createNewPage(TransactionId tid, PageId pageId) throws IOException {
+    	byte[] heapPageBuffer = new byte[BufferPool.PAGE_SIZE];
+    	
+    	HeapPageId heapPageId = (HeapPageId) pageId;
+    	HeapPage page = new HeapPage(heapPageId, heapPageBuffer);
+    	
+    	return page;
+	}
+
+	/**
      * Remove the specified tuple from the buffer pool.
      * Will acquire a write lock on the page the tuple is removed from. May block if
      * the lock cannot be acquired.
@@ -152,7 +254,11 @@ public class BufferPool {
     	
     	PageId pageId = t.getRecordId().getPageId();
     	HeapPage pageToUpdate = (HeapPage) getPage(tid, pageId, null);
+    	
+    	lastAccessedTimeStamps.put(pageToUpdate.getId(), new Date());
+    	
     	pageToUpdate.deleteTuple(t);
+    	pageToUpdate.markDirty(true, tid);
     }
 
     /**
@@ -161,9 +267,9 @@ public class BufferPool {
      *     break simpledb if running in NO STEAL mode.
      */
     public synchronized void flushAllPages() throws IOException {
-        // some code goes here
-        // not necessary for lab1
-
+    	for (Entry<PageId, Page> pageEntry : cachedPages.entrySet()) {
+    			flushPage(pageEntry.getKey());
+		}
     }
 
     /** Remove the specific page id from the buffer pool.
@@ -181,8 +287,20 @@ public class BufferPool {
      * @param pid an ID indicating the page to flush
      */
     private synchronized  void flushPage(PageId pid) throws IOException {
-        // some code goes here
-        // not necessary for lab1
+    	Page dirtyPage = cachedPages.get(pid);
+    	
+    	if(null == dirtyPage.isDirty())
+    		return;
+    		
+    	int tableId = dirtyPage.getId().getTableId();
+		DbFile dbFile = Database.getCatalog().getDbFile(tableId);
+		try {
+			dbFile.writePage(dirtyPage);
+			dirtyPage.markDirty(false, null);
+			
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
     }
 
     /** Write all pages of the specified transaction to disk.
@@ -195,10 +313,110 @@ public class BufferPool {
     /**
      * Discards a page from the buffer pool.
      * Flushes the page to disk to ensure dirty pages are updated on disk.
+     * @param tid 
      */
-    private synchronized  void evictPage() throws DbException {
-        // some code goes here
-        // not necessary for lab1
+    private synchronized  void evictPage(TransactionId tid) throws DbException {
+    	
+    	Page oldestPageToEvict = findOldestPageWhichHasNoLocksAndIsNotDirtyToEvict();
+    	
+    		try {
+				flushPage(oldestPageToEvict.getId());
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+    	
+    	cachedPages.remove(oldestPageToEvict.getId());
+    	lastAccessedTimeStamps.remove(oldestPageToEvict.getId());
+    	
+    	//System.out.println("lockmap:size:before eviction "+lockMap.size());
+    	
+    	PageLock removed =  lockMap.remove(oldestPageToEvict.getId());
+    	
+    	if(null == removed){
+    		//	System.out.println("pagelock is empty");
+    		throw new DbException("Cannot evict page not suitable page to evict found ");
+    	}
+    	
+    	if(null != removed){
+    		//System.out.println("pageLock removed: " + removed + " has exclusive locks:" + removed.hasExclusiveLock());
+    		removed.releaseLock(tid);
+    		//System.out.println("pageLock removed: " + removed + " has exclusive locks:" + removed.hasExclusiveLock());
+    	}
+    	
+    	//System.out.println("lockmap:size:after eviction "+lockMap.size());
     }
+
+	private Page findOldestPageWhichHasNoLocksAndIsNotDirtyToEvict() throws DbException {
+		PageId oldestPageid = null;
+		Date oldestDate = null;
+		boolean found = false;
+		
+		for ( Entry<PageId, Date> entry : lastAccessedTimeStamps.entrySet()) {
+			boolean hasExclusiveLock = hasExclusiveLock(entry.getKey());
+			boolean isDirty = isDirty(entry.getKey());
+			if(hasExclusiveLock && isDirty)
+				continue;
+			
+			if(null == oldestPageid){
+				oldestPageid = entry.getKey();
+				oldestDate = entry.getValue();
+				found = true;
+				continue;
+			}
+			
+			if(entry.getValue().before(oldestDate)){
+				oldestPageid = entry.getKey();
+				oldestDate = entry.getValue();
+			}
+			
+		}
+		
+
+		if(!found)
+			throw new DbException("no suitable pages found for eviciton");
+		
+		Page result = cachedPages.get(oldestPageid);
+		
+		if(null == result)
+			System.out.println("!! got empty page !!");
+		
+		return result;
+	}
+
+	private boolean isDirty(PageId key) {
+		if(!cachedPages.containsKey(key))
+			return false;
+		
+		return cachedPages.get(key).isDirty() != null;
+	}
+
+	private boolean hasExclusiveLock(PageId key) {
+		if(!lockMap.containsKey(key))
+			return false;
+			
+		PageLock pageLock = lockMap.get(key);
+		return pageLock.hasExclusiveLock();
+	}
+
+	public void updateTransactionLock(TransactionId tid, PageLock pageLock) {
+		if(!transactionLocks.containsKey(tid)){
+			transactionLocks.put(tid, new ArrayList<PageLock>());
+		}
+		
+		List<PageLock> locksHeld = transactionLocks.get(tid);
+		//TODO::OPTIMIZE THIS
+		
+		boolean found = false;
+		for (PageLock pl : locksHeld) {
+			if(pl.hashCode() == pageLock.hashCode()){
+				found = true;
+				break;
+			}
+		}
+		
+		if(!found){
+			locksHeld.add(pageLock);
+		}
+	}
 
 }

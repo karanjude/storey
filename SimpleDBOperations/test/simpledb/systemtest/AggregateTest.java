@@ -109,6 +109,7 @@ public class AggregateTest extends SimpleDbTestBase {
 
     @Test public void testAverageNoGroup()
             throws IOException, DbException, TransactionAbortedException {
+    	System.out.println("================================");
         doAggregate(Aggregator.Op.AVG, Aggregator.NO_GROUPING);
     }
 
