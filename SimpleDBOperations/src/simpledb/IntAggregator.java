@@ -46,9 +46,8 @@ public class IntAggregator implements Aggregator {
      * @param tup the Tuple containing an aggregate field and a group-by field
      */
     public void merge(Tuple tup) {
-    	System.out.println("tup : " + tup);
+    	//System.out.println("tup : " + tup);
     	groupingStrategy.merge(tup);
-
     	
     	hasRecords = true;
     }

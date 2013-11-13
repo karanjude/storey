@@ -231,7 +231,32 @@ public class TransactionTest extends SimpleDbTestBase {
     throws IOException, DbException, TransactionAbortedException {
         validateTransactions(10);
     }
+     
+     @Test public void test15Threads()
+    throws IOException, DbException, TransactionAbortedException {
+        validateTransactions(15);
+    } 
 
+     @Test public void test20Threads()
+    throws IOException, DbException, TransactionAbortedException {
+        validateTransactions(20);
+    } 
+
+     @Test public void test50Threads()
+    throws IOException, DbException, TransactionAbortedException {
+        validateTransactions(50);
+    } 
+
+     @Test public void test100Threads()
+    throws IOException, DbException, TransactionAbortedException {
+        validateTransactions(100);
+    } 
+
+     @Test public void test150Threads()
+    throws IOException, DbException, TransactionAbortedException {
+        validateTransactions(150);
+    } 
+     
     public void testAllDirtyFails()
             throws IOException, DbException, TransactionAbortedException {
         // Allocate a file with ~10 pages of data

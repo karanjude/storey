@@ -12,6 +12,7 @@ import java.io.*;
 
 public class Database {
 	private static Database _instance = new Database();
+	private static Locktable _lockTable;
     private final Catalog _catalog;
     private BufferPool _bufferpool; 
 
@@ -21,6 +22,8 @@ public class Database {
     private Database() {
     	_catalog = new Catalog();
     	_bufferpool = new BufferPool(BufferPool.DEFAULT_PAGES);
+    	_lockTable = new Locktable();
+    	
     	try {
             _logfile = new LogFile(new File(LOGFILENAME));
         } catch(IOException e) {
@@ -51,6 +54,7 @@ public class Database {
     */
     public static BufferPool resetBufferPool(int pages) {
         _instance._bufferpool = new BufferPool(pages);
+        Database.getLocktable().reset();
         return _instance._bufferpool;
     }
 
@@ -58,5 +62,9 @@ public class Database {
     public static void reset() {
     	_instance = new Database();
     }
+
+	public static Locktable getLocktable() {
+		return _lockTable;
+	}
 
 }

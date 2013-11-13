@@ -56,8 +56,8 @@ public class NoGroupingStrategy extends GroupingStrategy {
     		groupedTuplesCount.put(groupByFiled, cnt1);
     		
     		int avg = (int)(sum1/cnt1);
-    		if(0 == avg)
-    			System.out.println("0 avg");
+    		//if(0 == avg)
+    		//	System.out.println("0 avg");
     		
     		
     		groupedTuple.setField(0, new IntField(avg));
@@ -75,7 +75,7 @@ public class NoGroupingStrategy extends GroupingStrategy {
     		}
     	}
     	
-    	System.out.println("Calculated avg value: " + groupedTuple);
+    	//System.out.println("Calculated avg value: " + groupedTuple);
     	
    		groupedTuples.put(groupByFiled, groupedTuple);
 	}

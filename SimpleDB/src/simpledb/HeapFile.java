@@ -1,10 +1,16 @@
 package simpledb;
 
-import java.awt.HeadlessException;
-import java.io.*;
-import java.util.*;
-
-import javax.naming.BinaryRefAddr;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
 
 /**
  * HeapFile is an implementation of a DbFile that stores a collection
@@ -125,8 +131,12 @@ public class HeapFile implements DbFile {
     	
     	byte[] heapPageBuffer = new byte[BufferPool.PAGE_SIZE];
     	
+    	int pageNo = pid.pageno();
+    	
+    	int numPagesToSkip = (pageNo - 1) < 0 ? 0 : pageNo-1;
+    	
     	try {
-    		randomAccessFile.skipBytes(pid.pageno() * BufferPool.PAGE_SIZE);
+    		randomAccessFile.skipBytes(pageNo * BufferPool.PAGE_SIZE);
 			randomAccessFile.read(heapPageBuffer, 0,  BufferPool.PAGE_SIZE);
 		} catch (IOException e1) {
 			e1.printStackTrace();
@@ -171,10 +181,17 @@ public class HeapFile implements DbFile {
     	
     	int pageNo = page.getId().pageno();
     	
-    	int numPagesToSkip = (pageNo - 1) < 0 ? 0 : pageNo - 1;
+    	int numPagesToSkip = (pageNo - 1) < 0 ? 0 : pageNo-1;
+    	
+    	int fileLength = (int) randomAccessFile.length();
+    	int newLength = pageNo * BufferPool.PAGE_SIZE + BufferPool.PAGE_SIZE;
+    	
+    	if(fileLength < newLength)
+    		randomAccessFile.setLength(newLength);
+    	
     	
     	try {
-    		randomAccessFile.skipBytes(numPagesToSkip  * BufferPool.PAGE_SIZE);
+    		randomAccessFile.skipBytes(pageNo  * BufferPool.PAGE_SIZE);
 			randomAccessFile.write(heapPageBuffer, 0,  BufferPool.PAGE_SIZE);
 		} catch (IOException e1) {
 			e1.printStackTrace();
@@ -194,7 +211,10 @@ public class HeapFile implements DbFile {
      * Returns the number of pages in this HeapFile.
      */
     public int numPages() {
-    	return pageIdList.size();
+    	int pageCount = pageIdList.size();
+    	if(0 != pageCount)
+    		return pageIdList.size();
+    	return numPages;
     }
 
     // see DbFile.java for javadocs
@@ -290,8 +310,13 @@ public class HeapFile implements DbFile {
 			public Tuple next() throws DbException, TransactionAbortedException,
 					NoSuchElementException {
 				
-				if(null != tupleIterator)
-					return tupleIterator.next();
+				if(null != tupleIterator){
+					Tuple tuple = tupleIterator.next();
+					if(Database.getLocktable().isLocked(tuple))
+						return tuple.oldValue();
+					
+					return tuple;
+				}
 				
 				throw new NoSuchElementException();
 			}

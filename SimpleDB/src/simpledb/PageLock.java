@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -88,6 +87,11 @@ public class PageLock {
 			exclusiveLockCount++;
 			listOfTransactionsHoldingExclusiveLock.add(tid);
 			
+			if(!acquired){
+				boolean released = tryAskingTrasactionHoldingTheLockToRelinguish(tid);
+				if(released)
+					acquired = retryGettingLock(tid);
+			}
 			if(!acquired)
 				throw new TransactionAbortedException("Transaction was aborted " + tid + " was aborted as it could not acquire lock on page : " + pid);
 			
@@ -103,6 +107,18 @@ public class PageLock {
 		}
 	}
 
+	private boolean tryAskingTrasactionHoldingTheLockToRelinguish(
+			TransactionId tid) {
+		boolean isDirty = Database.getBufferPool().isDirty(pid);
+		if(!isDirty){
+			for (TransactionId t : listOfTransactionsHoldingExclusiveLock) {
+				this.releaseExclusiveLock(t);
+			}
+			return true;
+		}
+		return false;
+	}
+
 	private boolean retryGettingLock(TransactionId tid)
 			throws InterruptedException {
 		boolean acquired = exclusiveLock.tryAcquire(200, TimeUnit.MILLISECONDS);
@@ -111,7 +127,7 @@ public class PageLock {
 				trialMap.put(tid, 1);
 			}
 			int trial = trialMap.get(tid);
-			if(trial > 3){
+			if(trial > 0){
 				trialMap.remove(tid);
 				return false;
 			}else{
@@ -172,8 +188,6 @@ public class PageLock {
     		this.acquireExclusiveLock(tid);
     	}
 
-    	Database.getBufferPool().updateTransactionLock(tid, this);
-    	
 		return this;
 	}
 

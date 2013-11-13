@@ -137,36 +137,32 @@ public class TupleDesc {
         return size;
     }
 
-    /**
-     * Compares the specified object with this TupleDesc for equality.
-     * Two TupleDescs are considered equal if they are the same size and if the
-     * n-th type in this TupleDesc is equal to the n-th type in td.
-     *
-     * @param o the Object to be compared for equality with this TupleDesc.
-     * @return true if the object is equal to this TupleDesc.
-     */
+    @Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + Arrays.hashCode(fieldAr);
+		result = prime * result + numFields;
+		result = prime * result + Arrays.hashCode(typeAr);
+		return result;
+	}
+    
     public boolean equals(Object o) {
     	if(!(o instanceof TupleDesc)){
-    		return false;
+    		return false;                                                                                                                           
     	}
-    	
-    	TupleDesc other = (TupleDesc)o;
-    	
-    	if(this.numFields != other.numFields)
-    		return false;
-    	
-    	for(int i = 0; i < this.numFields;i++){
-    		if(!this.typeAr[i].equals(other.typeAr[i]))
-    			return false;
-    	}
-    	
-        return true;
-    }
 
-    public int hashCode() {
-        // If you want to use TupleDesc as keys for HashMap, implement this so
-        // that equal objects have equals hashCode() results
-        throw new UnsupportedOperationException("unimplemented");
+	    TupleDesc other = (TupleDesc)o;                                                                                                         
+	
+	    if(this.numFields != other.numFields)
+	    	return false;                                                                                                                           
+
+	    for(int i = 0; i < this.numFields;i++){                                                                                                 
+	            if(!this.typeAr[i].equals(other.typeAr[i]))
+	            return false;                                                                                                                   
+	     }
+
+	    return true;                                                                                                                        
     }
 
     /**

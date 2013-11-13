@@ -1,6 +1,7 @@
 package simpledb;
 
 import java.util.*;
+
 import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
@@ -25,16 +26,36 @@ public class TransactionTest extends TestUtil.CreateHeapFile {
     // create a new empty HeapFile and populate it with three pages.
     // we should be able to add 512 tuples on an empty page.
     TransactionId tid = new TransactionId();
+    Set<Page> effectedPages = new HashSet<Page>();
+    
     for (int i = 0; i < 1025; ++i) {
-      empty.addTuple(tid, Utility.getHeapTuple(i, 2));
+      effectedPages.addAll(empty.addTuple(tid, Utility.getHeapTuple(i, 2)));
     }
 
     // if this fails, complain to the TA
     assertEquals(3, empty.numPages());
 
-    this.p0 = new HeapPageId(empty.getId(), 0);
-    this.p1 = new HeapPageId(empty.getId(), 1);
-    this.p2 = new HeapPageId(empty.getId(), 2);
+    int s, m , b;
+    s = -1;
+    m = -1;
+    b = -1;
+    
+    for (Page page : effectedPages) {
+		if(page.getId().pageno() > b){
+			s = m;
+			m = b;
+			b = page.getId().pageno();
+		}else if(page.getId().pageno() > m){
+			s = m;
+			m = page.getId().pageno();
+		}else{
+			s = page.getId().pageno();
+		}
+	}
+    
+    this.p0 = new HeapPageId(empty.getId(), s);
+    this.p1 = new HeapPageId(empty.getId(), m);
+    this.p2 = new HeapPageId(empty.getId(), b);
     this.tid1 = new TransactionId();
     this.tid2 = new TransactionId();
 
@@ -72,8 +93,7 @@ public class TransactionTest extends TestUtil.CreateHeapFile {
     Tuple t = Utility.getHeapTuple(new int[] { 6, 830 });
     t.setRecordId(new RecordId(p2, 1));
 
-    p.addTuple(t);
-    p.markDirty(true, tid1);
+    bp.insertTuple(tid1, t.getRecordId().getPageId().getTableId(), t);
     bp.transactionComplete(tid1, commit);
 
     // now, flush the buffer pool and access the page again from disk.

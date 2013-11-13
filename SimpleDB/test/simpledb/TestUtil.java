@@ -2,6 +2,7 @@ package simpledb;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 
 import static org.junit.Assert.*;
 
@@ -314,6 +315,7 @@ public class TestUtil {
         Exception error;
         Object alock;
         Object elock;
+		private CountDownLatch latch;
 
         /**
          * @param tid the transaction on whose behalf we want to acquire the lock
@@ -330,18 +332,21 @@ public class TestUtil {
             this.elock = new Object();
         }
 
-        public void run() {
+        public LockGrabber(TransactionId tid, PageId pid, Permissions perm,
+				CountDownLatch latch) {
+        	this(tid, pid, perm);
+        	this.latch = latch;
+		}
+
+		public void run() {
             try {
                 Database.getBufferPool().getPage(tid, pid, perm);
-                synchronized(alock) {
                     acquired = true;
-                }
+                    if(null != latch)
+                    	latch.countDown();
             } catch (Exception e) {
                 e.printStackTrace();
-                synchronized(elock) {
                     error = e;
-                }
-
                 try {
                     Database.getBufferPool().transactionComplete(tid, false);
                 } catch (java.io.IOException e2) {
@@ -354,9 +359,7 @@ public class TestUtil {
          * @return true if we successfully acquired the specified lock
          */
         public boolean acquired() {
-            synchronized(alock) {
                 return acquired;
-            }
         }
 
         /**
@@ -364,9 +367,7 @@ public class TestUtil {
          *   null otherwise
          */
         public Exception getError() {
-            synchronized(elock) {
                 return error;
-            }
         }
     }
 

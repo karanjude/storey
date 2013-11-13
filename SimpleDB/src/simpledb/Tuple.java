@@ -1,5 +1,7 @@
 package simpledb;
 
+import java.util.Arrays;
+
 /**
  * Tuple maintains information about the contents of a tuple.
  * Tuples have a specified schema specified by a TupleDesc object and contain
@@ -86,4 +88,38 @@ public class Tuple {
     	
     	return buffer.toString();
     }
+
+	public Tuple oldValue() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + Arrays.hashCode(fields);
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) {
+			return true;
+		}
+		if (obj == null) {
+			return false;
+		}
+		if (!(obj instanceof Tuple)) {
+			return false;
+		}
+		Tuple other = (Tuple) obj;
+		if (!Arrays.equals(fields, other.fields)) {
+			return false;
+		}
+		return true;
+	}
+	
+	
+	
 }

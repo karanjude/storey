@@ -242,7 +242,7 @@ public class HeapPage implements Page {
      *         already empty.
      * @param t The tuple to delete
      */
-    public void deleteTuple(Tuple t) throws DbException {
+    public synchronized void deleteTuple(Tuple t) throws DbException {
     	if(!getId().equals(t.getRecordId().getPageId()))
     		throw new DbException("Record Id Mismatch");
     	
@@ -270,7 +270,7 @@ public class HeapPage implements Page {
      *         is mismatch.
      * @param t The tuple to add.
      */
-    public void addTuple(Tuple t) throws DbException {
+    public synchronized void addTuple(Tuple t) throws DbException {
     	if(getNumEmptySlots() == 0)
     		throw new DbException("Page Full, no empty slots available");
     	
@@ -402,39 +402,30 @@ public class HeapPage implements Page {
      * (note that this iterator shouldn't return tuples in empty slots!)
      */
     public Iterator<Tuple> iterator() {
-    	return new Iterator<Tuple>() {
-			int ctr = 0;
-    		
-			@Override
-			public void remove() {
-			}
-			
-			@Override
-			public Tuple next() {
-				int indx = slotsFilled.get(ctr);
-				
-				while(indx == -1 && hasNext()){
-					ctr++;
-					indx = slotsFilled.get(ctr);
-				}
-				
-				if(-1 == indx)
-					ctr++;
-					
-				Tuple toReturn = tuples[ctr];
-				ctr++;
-				
-				return toReturn;
-			}
-			
-			@Override
-			public boolean hasNext() {
-				int numSlots = slotsFilled.size() - deletedSlots.size();
-				boolean reachedEnd = numSlots > 0 && ctr < slotsFilled.size();
-				return reachedEnd;
-			}
-		};
+    	return new HeapPageIterator(this);
     }
+
+	public synchronized Tuple readNextTuple(HeapPageIterator heapPageIterator) {
+		int indx = slotsFilled.get(heapPageIterator.ctr);
+		
+		while(indx == -1 && heapPageIterator.hasNext()){
+			heapPageIterator.ctr++;
+			indx = slotsFilled.get(heapPageIterator.ctr);
+		}
+		
+		if(-1 == indx)
+			heapPageIterator.ctr++;
+			
+		Tuple toReturn = tuples[heapPageIterator.ctr];
+		heapPageIterator.ctr++;
+		
+		if(null == toReturn){
+			if(heapPageIterator.hasNext())
+				return heapPageIterator.next();
+		}
+		
+		return toReturn;
+	}
 
 }
 

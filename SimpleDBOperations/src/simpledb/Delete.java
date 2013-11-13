@@ -80,14 +80,20 @@ public class Delete extends AbstractDbIterator {
     	
     	while(child.hasNext()){
     		Tuple tuple = child.next();
+    		if(null == tuple)
+    			continue;
+    		
     			int tableId = tuple.getRecordId().getPageId().getTableId();
     			DbFile dbFile = Database.getCatalog().getDbFile(tableId);
-    			Page page = dbFile.deleteTuple(tid, tuple);
-    			if(!dirtyPagesMap.containsKey(page.getId()))
-    				dirtyPagesMap.put(page.getId(), page);
-    			
-    			recordsDeleted++;
-    			
+    			try{
+    				Page page = dbFile.deleteTuple(tid, tuple);
+    				if(!dirtyPagesMap.containsKey(page.getId()))
+    					dirtyPagesMap.put(page.getId(), page);
+    				
+    				recordsDeleted++;
+    			}catch(DbException e){
+    				continue;
+    			}
     			//System.out.println("Tuple deleted: " + tuple);
     	}
 
